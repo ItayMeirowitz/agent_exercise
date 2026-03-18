@@ -12,31 +12,39 @@
 import avalon_st_agent_pack::*;
 
 module tb ();
-    typedef byte byte_arr[$];
-    typedef byte_arr queue_byte_arr[$];
 
-    function byte_arr random_byte_queue(int size);
-        byte_arr queue;
+    // Typedef of byte queue to allow returning it from functions
+    typedef byte byte_queue[$];
 
+    // Typedef of array of byte queues returning from functions
+    typedef byte_queue queue_arr[$];
+
+    function byte_queue random_bytes_gen(int size);
+        byte_queue queue;
+
+        // Generate random byte size times.
         repeat(size) begin
-            queue.push_back($urandom_range(0, 255)); // random byte
+            queue.push_back($urandom_range(0, 255));
         end
 
+        // Return final queue
         return queue;
     endfunction
 
-    function byte_arr random_random_byte_queue();
-        return random_byte_queue($urandom_range(1, 100));
+    function byte_queue random_queue_gen(int min = 1, int max = 100);
+        return random_bytes_gen($urandom_range(min, max));
     endfunction
 
-    function queue_byte_arr random_random_byte_queue_queue(int queues);
-        queue_byte_arr queue_queue;
+    function queue_arr multiple_queues_gen(int amount);
+        queue_arr queues;
         
-        repeat(queues) begin
-            queue_queue.push_back((random_random_byte_queue()));
+        // Generate queue amount times.
+        repeat(amount) begin
+            queues.push_back((random_queue_gen()));
         end
 
-        return queue_queue;
+        // Return queues queue
+        return queues;
     endfunction
 
     //////////////////////////////////////////////////////////////////////////////
@@ -46,7 +54,7 @@ module tb ();
     localparam int unsigned DATA_WIDTH_IN_BYTES = 4;
     localparam int unsigned QUEUES_AMOUNT = 4;
 
-    byte tb_queues[QUEUES_AMOUNT-1:0][$] = random_random_byte_queue_queue(QUEUES_AMOUNT);
+    byte tb_queues[QUEUES_AMOUNT][$] = multiple_queues_gen(QUEUES_AMOUNT);
     byte test_queue[8:0] = {8'h12,8'h12,8'h12,8'h12,8'h12,8'h12,8'h43,8'h65,8'h98};
 
     //////////////////////////////////////////////////////////////////////////////
@@ -60,7 +68,8 @@ module tb ();
     avalon_st_if#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES)) vif (.clk(clk));
 
     // TODO - Declare your classes here.
-    avalon_st_agent#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER)) agent = new(vif);
+    avalon_st_agent#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER)) master_agent = new(vif);
+    avalon_st_agent#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(SLAVE), .READY_P(50)) slave_agent = new(vif);
 
     //////////////////////////////////////////////////////////////////////////////
     // General processes.
@@ -93,17 +102,23 @@ module tb ();
     // TestBench Logic
     //////////////////////////////////////////////////////////////////////////////
     // Test logic.
+
+    initial begin
+        #20;
+        @(posedge(clk));
+        slave_agent.drive();
+    end
+
     initial begin
         #20;
     	// TODO - Insert TB logic here.
         @(posedge(clk));
-        vif.rdy = 1;
 
         for (int i = 0; i < QUEUES_AMOUNT; i++) begin
-            agent.drive(tb_queues[i]);
+            master_agent.drive(tb_queues[i]);
         end
         @(posedge(clk));
         @(posedge(clk));
-        agent.drive(test_queue);
+        master_agent.drive(test_queue);
     end
 endmodule
