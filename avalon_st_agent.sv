@@ -39,27 +39,24 @@ class avalon_st_agent #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OPE
         while ((size = queue.size()) > 0) begin
 
             // Set valid
-            vif.valid <= 1'b1;
+            vif.master_cb.valid <= 1'b1;
 
             // set SOP EOP conditions
-            vif.sop   <= (size == original_size);
-            vif.eop   <= (size <= DATA_WIDTH_IN_BYTES);
+            vif.master_cb.sop   <= (size == original_size);
+            vif.master_cb.eop   <= (size <= DATA_WIDTH_IN_BYTES);
 
             // Pop word into data and evaluate empty
-            vif.data  <= pop_word(queue, empty);
-            vif.empty <= empty;
+            vif.master_cb.data  <= pop_word(queue, empty);
+            vif.master_cb.empty <= empty;
 
             // Wait until ready.
-            do @(posedge vif.clk); while (!vif.rdy);
+            @(vif.master_cb);
+            wait(vif.master_cb.rdy);
         end
 
         // Set default values
-        vif.valid <= 1'b0;
-        vif.sop   <= 1'b0;
-        vif.eop   <= 1'b0;
-        vif.data  <= '0;
-        vif.empty <= '0;
-        @(posedge vif.clk);
+        vif.CLEAR_MASTER_CB();
+        @(vif.master_cb);
     endtask
 
     task drive_slave();
@@ -67,13 +64,13 @@ class avalon_st_agent #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OPE
 
         // Endless loop controlling ready
         forever begin
-            @(posedge vif.clk);
 
             // Generate random number between 1 and 100
             randint = $urandom_range(1, 100);
 
             // If the number is larger than READY_P lower ready
-            vif.rdy <= (randint <= READY_P);
+            vif.slave_cb.rdy <= (randint <= READY_P);
+            @(vif.slave_cb);
         end
     endtask
 
