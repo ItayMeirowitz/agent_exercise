@@ -2,15 +2,19 @@ import avalon_st_agent_pack::*;
 
 class avalon_st_agent #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OPERATION_MODE = MASTER, parameter int READY_P = 100);
 
+    // Create vif to manipulate
     virtual avalon_st_if #(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES)) vif;
 
+    // Constructor to assign vif.
     function new(virtual avalon_st_if #(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES)) vif);
         this.vif = vif;
     endfunction
 
+    // Pops a word (DATA_WIDTH_IN_BYTES wide) from the queue and returns it, if the queue becomes empty
+    // returns zeros and outputs the calculated empty value.
     function automatic logic[DATA_WIDTH_IN_BYTES*8-1:0] pop_word(ref byte queue[$], output int empty);
-        logic[DATA_WIDTH_IN_BYTES*8-1:0] word;
         int inner_empty = 0;
+        logic[DATA_WIDTH_IN_BYTES*8-1:0] word;
 
         // Set each byte of the word to the popped byte / empty (0's)
         for (int i = DATA_WIDTH_IN_BYTES - 1; i >= 0; i--) begin
@@ -25,14 +29,15 @@ class avalon_st_agent #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OPE
             end
         end
 
-        // return and set empty
+        // return word and set empty
         empty = inner_empty;
         return word;
     endfunction
 
+    // Drive master using a byte queue converting it into the avalon_st interface
     task drive_master(byte queue[$]);
-        int empty;
         int size;
+        int empty;
         int original_size = queue.size();
 
         // While there is data to send
@@ -59,6 +64,7 @@ class avalon_st_agent #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OPE
         @(vif.master_cb);
     endtask
 
+    // Drive slave avalon_st interface ready signal based on the ready probability. 
     task drive_slave();
         int randint;
 
@@ -81,7 +87,7 @@ class avalon_st_agent #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OPE
         end else if (OPERATION_MODE == SLAVE) begin
             drive_slave();
         end else begin
-            $fatal("Unimplemented mode.");
+            $fatal("Unimplemented drive mode.");
         end
     endtask
 endclass

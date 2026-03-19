@@ -19,6 +19,7 @@ module tb ();
     // Typedef of array of byte queues returning from functions
     typedef byte_queue queue_arr[$];
 
+    // Generate and return a random byte queue of specific length - size
     function byte_queue random_bytes_gen(int size);
         byte_queue queue;
 
@@ -31,10 +32,12 @@ module tb ();
         return queue;
     endfunction
 
+    // Generate and return a random byte queue of random length between min and max.
     function byte_queue random_queue_gen(int min = 1, int max = 100);
         return random_bytes_gen($urandom_range(min, max));
     endfunction
 
+    // Generate and return a queue of random byte queues of random lengths.
     function queue_arr multiple_queues_gen(int amount);
         queue_arr queues;
         
@@ -52,9 +55,14 @@ module tb ();
     //////////////////////////////////////////////////////////////////////////////
     // Data width.
     localparam int unsigned DATA_WIDTH_IN_BYTES = 4;
+
+    // Amount of random queues to test.
     localparam int unsigned QUEUES_AMOUNT = 4;
 
+    // Generate random queues
     byte tb_queues[QUEUES_AMOUNT][$] = multiple_queues_gen(QUEUES_AMOUNT);
+
+    // Predetermined queue to test
     byte test_queue[8:0] = {8'h12,8'h12,8'h12,8'h12,8'h12,8'h12,8'h43,8'h65,8'h98};
 
     //////////////////////////////////////////////////////////////////////////////
@@ -68,6 +76,7 @@ module tb ();
     avalon_st_if#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES)) vif (.clk(clk));
 
     // TODO - Declare your classes here.
+    // Create the master and slave agent to control the interface
     avalon_st_agent#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER)) master_agent = new(vif);
     avalon_st_agent#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(SLAVE), .READY_P(50)) slave_agent = new(vif);
 
@@ -103,22 +112,26 @@ module tb ();
     //////////////////////////////////////////////////////////////////////////////
     // Test logic.
 
+    // Control the slave lines of the interface
     initial begin
         #20;
         @(posedge(clk));
         slave_agent.drive();
     end
 
+    // Control the master lines of the interface
     initial begin
-        #20;
     	// TODO - Insert TB logic here.
+        #20;
         @(posedge(clk));
 
+        // Drive each random queue.
         for (int i = 0; i < QUEUES_AMOUNT; i++) begin
             master_agent.drive(tb_queues[i]);
         end
         @(posedge(clk));
-        @(posedge(clk));
+        
+        // Drive test queue.
         master_agent.drive(test_queue);
     end
 endmodule
