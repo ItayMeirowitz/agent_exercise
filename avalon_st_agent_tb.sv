@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// File        : avalon_st_agent_tb.sv
+// File        : avalon_st_driver_tb.sv
 // Author      : 
 // Description : Top TB module for Agent Exercise.
 // -----------------------------------------------------------------------------
@@ -7,7 +7,7 @@
 // TODO - Add includes here!
 `include "avalon_st_if.sv"
 `include "avalon_st_agent_pack.sv"
-`include "avalon_st_agent.sv"
+`include "avalon_st_driver.sv"
 
 import avalon_st_agent_pack::*;
 
@@ -21,7 +21,7 @@ module tb ();
 
     // Generate and return a random byte queue of specific length - size
     function byte_queue random_bytes_gen(int size);
-        byte_queue queue;
+        byte_queue queue = {};
 
         // Generate random byte size times.
         repeat(size) begin
@@ -37,33 +37,15 @@ module tb ();
         return random_bytes_gen($urandom_range(min, max));
     endfunction
 
-    // Generate and return a queue of random byte queues of random lengths.
-    function queue_arr multiple_queues_gen(int amount);
-        queue_arr queues;
-        
-        // Generate queue amount times.
-        repeat(amount) begin
-            queues.push_back((random_queue_gen()));
-        end
-
-        // Return queues queue
-        return queues;
-    endfunction
-
     //////////////////////////////////////////////////////////////////////////////
     // Parameters.
     //////////////////////////////////////////////////////////////////////////////
+    localparam int unsigned RST_TIME = 20;
+    localparam int unsigned CLK_TOGGLE = 5;
+    localparam int unsigned TEST_AMOUNT = 10;
+
     // Data width.
     localparam int unsigned DATA_WIDTH_IN_BYTES = 4;
-
-    // Amount of random queues to test.
-    localparam int unsigned QUEUES_AMOUNT = 4;
-
-    // Generate random queues
-    byte tb_queues[QUEUES_AMOUNT][$] = multiple_queues_gen(QUEUES_AMOUNT);
-
-    // Predetermined queue to test
-    byte test_queue[8:0] = {8'h12,8'h12,8'h12,8'h12,8'h12,8'h12,8'h43,8'h65,8'h98};
 
     //////////////////////////////////////////////////////////////////////////////
     // Declarations.
@@ -77,8 +59,13 @@ module tb ();
 
     // TODO - Declare your classes here.
     // Create the master and slave agent to control the interface
-    avalon_st_agent#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER)) master_agent = new(vif);
-    avalon_st_agent#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(SLAVE), .READY_P(50)) slave_agent = new(vif);
+    avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER))              master_agent = new(vif);
+    avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(SLAVE), .READY_P(50)) slave_agent = new(vif);
+
+    byte arr1[$] = {
+        8'h00, 8'h00, 8'h00, 8'h01, 8'h00, 8'h00, 8'h00, 8'h02, 8'h00, 8'h00, 
+        8'h00, 8'h03, 8'h00, 8'h00, 8'h00, 8'h04, 8'h00, 8'h00, 8'h00, 8'h05, 8'h67
+    };
 
     //////////////////////////////////////////////////////////////////////////////
     // General processes.
@@ -86,13 +73,13 @@ module tb ();
     // Generate clock.
     initial begin
         clk = 0;
-        forever #5 clk = ~clk; 
+        forever #CLK_TOGGLE clk = ~clk; 
     end
 
     // Initialize reset signal.
     initial begin
         rst_n = 0;
-        #20;
+        #RST_TIME;
         rst_n = 1;
     end
 
@@ -114,7 +101,7 @@ module tb ();
 
     // Control the slave lines of the interface
     initial begin
-        #20;
+        #RST_TIME;
         @(posedge(clk));
         slave_agent.drive();
     end
@@ -122,16 +109,18 @@ module tb ();
     // Control the master lines of the interface
     initial begin
     	// TODO - Insert TB logic here.
-        #20;
+        #RST_TIME;
         @(posedge(clk));
 
-        // Drive each random queue.
-        for (int i = 0; i < QUEUES_AMOUNT; i++) begin
-            master_agent.drive(tb_queues[i]);
+        repeat (TEST_AMOUNT) begin
+            // master_agent.drive(random_bytes_gen(21));
+            master_agent.drive(arr1);
+            wait_clocks($urandom_range(1, 20));
+            // repeat(10) @(posedge(clk));
         end
-        @(posedge(clk));
-        
-        // Drive test queue.
-        master_agent.drive(test_queue);
     end
+
+    task automatic wait_clocks(int unsigned num_cycles);
+        repeat (num_cycles) @(posedge(clk));
+    endtask
 endmodule
