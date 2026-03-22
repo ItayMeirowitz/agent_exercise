@@ -12,36 +12,9 @@ import avalon_st_agent_pack::*;
 
 module tb ();
 
-    // Generate and return a random byte queue of specific length - size
-    function byte_queue random_bytes_gen(int size);
-        byte_queue queue;
-
-        std::randomize(queue) with {
-            queue.size() inside {[1:100]};
-        };
-
-        return queue;
-    endfunction
-    
-    // Generate and return a random byte queue of random length between min and max.
-    function byte_queue random_queue_gen(int min = 1, int max = 100);
-        return random_bytes_gen($urandom_range(min, max));
-    endfunction
-
     //////////////////////////////////////////////////////////////////////////////
     // Parameters.
     //////////////////////////////////////////////////////////////////////////////
-    localparam int unsigned RST_TIME = 20;
-    localparam int unsigned CLK_TOGGLE = 5;
-
-    // Amount of test queues
-    localparam int unsigned NUM_OF_MSGS = 10;
-    localparam int unsigned MASTER_VALID_P = 50;
-    localparam int unsigned SLAVE_RDY_P = 50;
-
-    // Clks between packets sent
-    localparam int unsigned MIN_CLKS_INTERVAL = 0;
-    localparam int unsigned MAX_CLKS_INTERVAL = 20;
 
     // Data width.
     localparam int unsigned DATA_WIDTH_IN_BYTES = 4;
@@ -63,6 +36,8 @@ module tb ();
     //////////////////////////////////////////////////////////////////////////////
     // General processes.
     //////////////////////////////////////////////////////////////////////////////
+    byte_queue queue;
+
     // Generate clock.
     initial begin
         clk = 0;
@@ -99,13 +74,15 @@ module tb ();
 
         // Send msgs
         repeat (NUM_OF_MSGS) begin
-            master_agent.drive_master(random_queue_gen());
-            wait_clocks($urandom_range(MIN_CLKS_INTERVAL, MAX_CLKS_INTERVAL));
+
+            // Randomize queue size and data
+            std::randomize(queue) with {queue.size() inside {[MIN_SIZE : MAX_SIZE]};};
+
+            // Drive queue
+            master_agent.drive_master(queue);
+
+            // Wait random interval between calls
+            #($urandom_range(MIN_INTERVAL, MAX_INTERVAL));
         end
     end
-
-    // Wait num_cycles amount of clocks
-    task automatic wait_clocks(int unsigned num_cycles);
-        repeat (num_cycles) @(vif.master_cb);
-    endtask
 endmodule
