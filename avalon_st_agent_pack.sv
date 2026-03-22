@@ -29,5 +29,8 @@ package avalon_st_agent_pack;
 
     // Queue sizes
     localparam int unsigned MIN_SIZE = 1; 
-    localparam int unsigned MAX_SIZE = 100; 
+    localparam int unsigned MAX_SIZE = 100;
+
+    // No empty percentage
+    localparam int unsigned ALIGNED_P = 40;
 endpackage

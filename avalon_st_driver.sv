@@ -13,10 +13,11 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
     function new(virtual avalon_st_if vif);
         this.vif = vif;
         
+        // Start separate thread to drive slave lines (without halting the software)
         fork
             if (OPERATION_MODE == SLAVE) begin
                 drive_slave();
-            end    
+            end
         join_none
     endfunction
 
@@ -24,11 +25,11 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
 	-- Functions and Tasks.
     -------------------------------------------------------------------------------*/
     // Generate random bit based on the probability
-    function bit rand_with_prob(int probability);
+    function bit rand_with_prob();
         std::randomize(rand_with_prob) with {
             rand_with_prob dist {
-                1 := probability,
-                0 := 100 - probability
+                1 := VALID_READY_P,
+                0 := 100 - VALID_READY_P
             };
         };
     endfunction
@@ -66,7 +67,7 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
 
         // While there is data to send
         while ((size = words.size()) > 0) begin
-            if (rand_with_prob(VALID_READY_P)) begin
+            if (rand_with_prob()) begin
 
                 // Set valid
                 vif.master_cb.valid <= 1'b1;
@@ -100,7 +101,7 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
         forever @(vif.slave_cb) begin
 
             // Randomize to get rdy_rand
-            vif.slave_cb.rdy <= rand_with_prob(VALID_READY_P);
+            vif.slave_cb.rdy <= rand_with_prob();
         end
     endtask
 endclass

@@ -30,8 +30,8 @@ module tb ();
     avalon_st_if#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES)) vif (.clk(clk));
 
     // Create the master and slave agent to control the interface
-    avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER), .VALID_READY_P(MASTER_VALID_P)) master_agent = new(vif);
     avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(SLAVE),  .VALID_READY_P(SLAVE_RDY_P)   ) slave_agent  = new(vif);
+    avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER), .VALID_READY_P(MASTER_VALID_P)) master_agent = new(vif);
 
     //////////////////////////////////////////////////////////////////////////////
     // General processes.
@@ -76,7 +76,15 @@ module tb ();
         repeat (NUM_OF_MSGS) begin
 
             // Randomize queue size and data
-            std::randomize(queue) with {queue.size() inside {[MIN_SIZE : MAX_SIZE]};};
+            std::randomize(queue) with {
+                queue.size() dist {
+                    [MIN_SIZE : MAX_SIZE]
+                };
+                queue.size() % DATA_WIDTH_IN_BYTES == 0 dist {
+                    1 := ALIGNED_P,
+                    0 := 100 - ALIGNED_P
+                }
+            };
 
             // Drive queue
             master_agent.drive_master(queue);
