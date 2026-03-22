@@ -6,12 +6,14 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
     -- Members.
     -------------------------------------------------------------------------------*/
     virtual avalon_st_if vif;
+    avalon_st_sequencer sequencer;
 
     /*-------------------------------------------------------------------------------
     -- Constructor.
     -------------------------------------------------------------------------------*/
-    function new(virtual avalon_st_if vif);
+    function new(virtual avalon_st_if vif, avalon_st_sequencer sequencer = null);
         this.vif = vif;
+        this.sequencer = sequencer;
         
         // Start separate thread to drive slave lines (without halting the software)
         fork
@@ -92,6 +94,15 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
 
         // Set default values
         vif.CLEAR_MASTER_CB();
+    endtask
+
+    task drive_msgs();
+        byte_queue current_queue;
+
+        forever begin
+            this.sequencer.get_queue(current_queue);
+            drive_master(current_queue);
+        end
     endtask
 
     // Drive slave avalon_st interface ready signal based on the ready probability. 
