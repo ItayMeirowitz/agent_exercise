@@ -42,7 +42,13 @@ module tb ();
     //////////////////////////////////////////////////////////////////////////////
     localparam int unsigned RST_TIME = 20;
     localparam int unsigned CLK_TOGGLE = 5;
+
+    // Amount of test queues
     localparam int unsigned TEST_AMOUNT = 10;
+
+    // Clks between packets sent
+    localparam int unsigned MIN_CLKS_INTERVAL = 0;
+    localparam int unsigned MAX_CLKS_INTERVAL = 0;
 
     // Data width.
     localparam int unsigned DATA_WIDTH_IN_BYTES = 4;
@@ -61,11 +67,6 @@ module tb ();
     // Create the master and slave agent to control the interface
     avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER))              master_agent = new(vif);
     avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(SLAVE), .READY_P(50)) slave_agent = new(vif);
-
-    byte arr1[$] = {
-        8'h00, 8'h00, 8'h00, 8'h01, 8'h00, 8'h00, 8'h00, 8'h02, 8'h00, 8'h00, 
-        8'h00, 8'h03, 8'h00, 8'h00, 8'h00, 8'h04, 8'h00, 8'h00, 8'h00, 8'h05, 8'h67
-    };
 
     //////////////////////////////////////////////////////////////////////////////
     // General processes.
@@ -113,10 +114,8 @@ module tb ();
         @(posedge(clk));
 
         repeat (TEST_AMOUNT) begin
-            // master_agent.drive(random_bytes_gen(21));
-            master_agent.drive(arr1);
-            wait_clocks($urandom_range(1, 20));
-            // repeat(10) @(posedge(clk));
+            master_agent.drive(random_queue_gen());
+            wait_clocks($urandom_range(MIN_CLKS_INTERVAL, MAX_CLKS_INTERVAL));
         end
     end
 
