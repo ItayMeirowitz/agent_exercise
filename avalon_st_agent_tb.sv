@@ -77,13 +77,13 @@ module tb ();
 
             // Randomize queue size and data
             std::randomize(queue) with {
-                queue.size() dist {
+                queue.size() inside {
                     [MIN_SIZE : MAX_SIZE]
                 };
                 queue.size() % DATA_WIDTH_IN_BYTES == 0 dist {
                     1 := ALIGNED_P,
                     0 := 100 - ALIGNED_P
-                }
+                };
             };
 
             // Drive queue
