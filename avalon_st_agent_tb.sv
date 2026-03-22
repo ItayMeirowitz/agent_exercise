@@ -4,7 +4,6 @@
 // Description : Top TB module for Agent Exercise.
 // -----------------------------------------------------------------------------
 
-// TODO - Add includes here!
 `include "avalon_st_if.sv"
 `include "avalon_st_agent_pack.sv"
 `include "avalon_st_driver.sv"
@@ -13,25 +12,17 @@ import avalon_st_agent_pack::*;
 
 module tb ();
 
-    // Typedef of byte queue to allow returning it from functions
-    typedef byte byte_queue[$];
-
-    // Typedef of array of byte queues returning from functions
-    typedef byte_queue queue_arr[$];
-
     // Generate and return a random byte queue of specific length - size
     function byte_queue random_bytes_gen(int size);
-        byte_queue queue = {};
+        byte_queue queue;
 
-        // Generate random byte size times.
-        repeat(size) begin
-            queue.push_back($urandom_range(0, 255));
-        end
+        std::randomize(queue) with {
+            queue.size() inside {[1:100]};
+        };
 
-        // Return final queue
         return queue;
     endfunction
-
+    
     // Generate and return a random byte queue of random length between min and max.
     function byte_queue random_queue_gen(int min = 1, int max = 100);
         return random_bytes_gen($urandom_range(min, max));
@@ -44,7 +35,9 @@ module tb ();
     localparam int unsigned CLK_TOGGLE = 5;
 
     // Amount of test queues
-    localparam int unsigned TEST_AMOUNT = 10;
+    localparam int unsigned NUM_OF_MSGS = 10;
+    localparam int unsigned MASTER_VALID_P = 50;
+    localparam int unsigned SLAVE_RDY_P = 50;
 
     // Clks between packets sent
     localparam int unsigned MIN_CLKS_INTERVAL = 0;
@@ -63,10 +56,9 @@ module tb ();
     // Interface declaration.
     avalon_st_if#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES)) vif (.clk(clk));
 
-    // TODO - Declare your classes here.
     // Create the master and slave agent to control the interface
-    avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER))              master_agent = new(vif);
-    avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(SLAVE), .READY_P(50)) slave_agent = new(vif);
+    avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER), .VALID_READY_P(MASTER_VALID_P)) master_agent = new(vif);
+    avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(SLAVE),  .VALID_READY_P(SLAVE_RDY_P)   ) slave_agent  = new(vif);
 
     //////////////////////////////////////////////////////////////////////////////
     // General processes.
@@ -100,26 +92,20 @@ module tb ();
     //////////////////////////////////////////////////////////////////////////////
     // Test logic.
 
-    // Control the slave lines of the interface
-    initial begin
-        #RST_TIME;
-        @(posedge(clk));
-        slave_agent.drive();
-    end
-
     // Control the master lines of the interface
     initial begin
-    	// TODO - Insert TB logic here.
         #RST_TIME;
         @(posedge(clk));
 
-        repeat (TEST_AMOUNT) begin
-            master_agent.drive(random_queue_gen());
+        // Send msgs
+        repeat (NUM_OF_MSGS) begin
+            master_agent.drive_master(random_queue_gen());
             wait_clocks($urandom_range(MIN_CLKS_INTERVAL, MAX_CLKS_INTERVAL));
         end
     end
 
+    // Wait num_cycles amount of clocks
     task automatic wait_clocks(int unsigned num_cycles);
-        repeat (num_cycles) @(posedge(clk));
+        repeat (num_cycles) @(vif.master_cb);
     endtask
 endmodule

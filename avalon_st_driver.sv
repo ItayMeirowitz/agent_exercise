@@ -1,6 +1,6 @@
 import avalon_st_agent_pack::*;
 
-class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OPERATION_MODE = MASTER, parameter int READY_P = 100);
+class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OPERATION_MODE = MASTER, parameter int VALID_READY_P = 100);
     
     /*-------------------------------------------------------------------------------
     -- Members.
@@ -12,7 +12,33 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
     -------------------------------------------------------------------------------*/
     function new(virtual avalon_st_if vif);
         this.vif = vif;
+        
+        fork
+            if (OPERATION_MODE == SLAVE) begin
+                drive_slave();
+            end    
+        join_none
     endfunction
+
+    /*-------------------------------------------------------------------------------
+    -- Constraints.
+    -------------------------------------------------------------------------------*/
+    rand bit rdy_rand;
+    rand bit valid_rand;
+
+    // Constraints for rdy and valid.
+    constraint rdy_dist {
+        rdy_rand dist {
+            1 := VALID_READY_P,
+            0 := 100 - VALID_READY_P
+        };
+    }
+    constraint valid_dist {
+        valid_rand dist {
+            1 := VALID_READY_P,
+            0 := 100 - VALID_READY_P
+        };
+    }
 
     /*-------------------------------------------------------------------------------
 	-- Functions and Tasks.
@@ -27,10 +53,6 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
         // Calc empty value
         int unsigned empty = (DATA_WIDTH_IN_BYTES - (queue.size() % DATA_WIDTH_IN_BYTES)) % DATA_WIDTH_IN_BYTES;
 
-        // Store SOP and EOP for ease of read.
-        logic sop;
-        logic eop;
-
         // Store the original amount of words for SOP
         int unsigned original_size = words.size();
 
@@ -39,22 +61,28 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
 
         // While there is data to send
         while ((size = words.size()) > 0) begin
-            sop = (size == original_size);
-            eop = (size == 1);
 
-            // Set valid
-            vif.master_cb.valid <= 1'b1;
+            // Randomize to get valid_rand
+            assert(this.randomize());
+            if (valid_rand) begin
 
-            // set SOP EOP conditions
-            vif.master_cb.sop   <= sop;
-            vif.master_cb.eop   <= eop;
+                // Set valid
+                vif.master_cb.valid <= 1'b1;
 
-            // Pop word into data and evaluate empty
-            vif.master_cb.data  <= words.pop_front();
-            vif.master_cb.empty <= eop ? empty : 0;
+                // set SOP EOP conditions
+                vif.master_cb.sop   <= (size == original_size);
+                vif.master_cb.eop   <= (size == 1);
 
-            // Wait for handshake
-            @(vif.master_cb iff vif.master_cb.rdy);
+                // Pop word into data and evaluate empty
+                vif.master_cb.data  <= words.pop_front();
+                vif.master_cb.empty <= (size == 1) ? empty : $urandom();
+
+                // Wait for handshake
+                @(vif.master_cb iff vif.master_cb.rdy);
+            end else begin
+                vif.CLEAR_MASTER_CB();
+                @(vif.master_cb iff vif.master_cb.rdy);
+            end
         end
 
         // Set default values
@@ -67,25 +95,11 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
         int randint;
 
         // Endless loop controlling ready
-        forever begin
+        forever @(vif.slave_cb) begin
 
-            // Generate random number between 1 and 100
-            randint = $urandom_range(1, 100);
-
-            // If the number is larger than READY_P lower ready
-            vif.slave_cb.rdy <= (randint <= READY_P);
-            @(vif.slave_cb);
-        end
-    endtask
-
-    // Drive function for both slave and master
-    task drive(byte queue[$] = {});
-        if (OPERATION_MODE == MASTER) begin
-            drive_master(queue);
-        end else if (OPERATION_MODE == SLAVE) begin
-            drive_slave();
-        end else begin
-            $fatal("Unimplemented drive mode.");
+            // Randomize to get rdy_rand
+            assert(this.randomize());
+            vif.slave_cb.rdy <= rdy_rand;
         end
     endtask
 endclass
