@@ -48,7 +48,7 @@ module tb ();
 
     // Clks between packets sent
     localparam int unsigned MIN_CLKS_INTERVAL = 0;
-    localparam int unsigned MAX_CLKS_INTERVAL = 0;
+    localparam int unsigned MAX_CLKS_INTERVAL = 20;
 
     // Data width.
     localparam int unsigned DATA_WIDTH_IN_BYTES = 4;
