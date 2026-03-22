@@ -35,8 +35,7 @@ module tb ();
 
     // Create the master and slave agent to control the interface
     avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(SLAVE),  .VALID_READY_P(SLAVE_RDY_P)   ) slave_agent  = new(vif);
-    avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER), .VALID_READY_P(MASTER_VALID_P)) master_agent = new(vif);
-
+    avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER), .VALID_READY_P(MASTER_VALID_P)) master_agent = new(vif, sequencer);
 
     //////////////////////////////////////////////////////////////////////////////
     // General processes.
@@ -96,8 +95,8 @@ module tb ();
                 };
             };
 
-            // Drive queue
-            master_agent.drive_master(queue);
+            // Store queue
+            sequencer.store_queue(queue);
 
             // Wait random interval between calls
             #($urandom_range(MIN_INTERVAL, MAX_INTERVAL));
