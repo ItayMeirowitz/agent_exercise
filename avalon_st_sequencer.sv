@@ -23,7 +23,7 @@ class avalon_st_sequencer;
     endfunction
 
     // Get first queue, if there are none, wait until there is.
-    task get_queue(output byte_queue queue);
+    task get_first_item(output byte_queue queue);
         wait(current_arr.size() > 0);
         queue = current_arr.pop_front();
     endtask

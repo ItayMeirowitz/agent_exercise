@@ -35,7 +35,10 @@ module tb ();
 
     // Create the master and slave agent to control the interface
     avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(SLAVE),  .VALID_READY_P(SLAVE_RDY_P)   ) slave_agent  = new(vif);
-    avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER), .VALID_READY_P(MASTER_VALID_P)) master_agent = new(vif, sequencer);
+    avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER), .VALID_READY_P(MASTER_VALID_P)) master_agent = new(vif);
+
+    // Assign sequencer to master agent
+    master_agent.set_sequencer(sequencer);
 
     //////////////////////////////////////////////////////////////////////////////
     // General processes.
@@ -78,7 +81,7 @@ module tb ();
 
         // Run driver in separate thread using data from sequencer
         fork
-            master_agent.drive_msgs();
+            master_agent.drive_master();
         join_none
 
         // Send msgs to sequencer
