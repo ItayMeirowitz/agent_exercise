@@ -62,10 +62,12 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
         int unsigned original_size;
         bit[DATA_WIDTH_IN_BYTES*8-1:0] words[$];
 
+        // Wait until a sequencer is set, as it is the source of the data.
         wait(this.sequencer != null);
         
+        // Start handling packets 
         forever begin
-            this.sequencer.get_first_item(queue);
+            this.sequencer.get_next_item(queue);
 
             // Pack byte queues into words
             words = {>>{queue}};
