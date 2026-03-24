@@ -6,11 +6,12 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
     -- Members.
     -------------------------------------------------------------------------------*/
     virtual avalon_st_if vif;
+    avalon_st_sequencer sequencer;
 
     /*-------------------------------------------------------------------------------
     -- Constructor.
     -------------------------------------------------------------------------------*/
-    function new(virtual avalon_st_if vif);
+    function new(virtual avalon_st_if vif, avalon_st_sequencer sequencer = null);
         this.vif = vif;
         
         // Start separate thread to drive slave lines (without halting the software)
@@ -19,6 +20,10 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
                 drive_slave();
             end
         join_none
+    endfunction
+
+    function set_sequencer(avalon_st_sequencer);
+        this.sequencer = sequencer;
     endfunction
 
     /*-------------------------------------------------------------------------------
@@ -50,43 +55,55 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
     endfunction
 
     // Drive master using a byte queue converting it into the avalon_st interface
-    task drive_master(byte_queue queue);
+    task drive_master();
+        byte_queue queue;
         int unsigned size;
+        int unsigned empty;
+        int unsigned original_size;
+        bit[DATA_WIDTH_IN_BYTES*8-1:0] words[$];
 
-        // Pack byte queues into words
-        bit[DATA_WIDTH_IN_BYTES*8-1:0] words[$] = {>>{queue}};
+        // Wait until a sequencer is set, as it is the source of the data.
+        wait(this.sequencer != null);
+        
+        // Start handling packets 
+        forever begin
+            this.sequencer.get_next_item(queue);
 
-        // Calc empty value
-        int unsigned empty = (DATA_WIDTH_IN_BYTES - (queue.size() % DATA_WIDTH_IN_BYTES)) % DATA_WIDTH_IN_BYTES;
+            // Pack byte queues into words
+            words = {>>{queue}};
 
-        // Store the original amount of words for SOP
-        int unsigned original_size = words.size();
+            // Calc empty value
+            empty = (DATA_WIDTH_IN_BYTES - (queue.size() % DATA_WIDTH_IN_BYTES)) % DATA_WIDTH_IN_BYTES;
 
-        // Sync to clocking block
-        @(vif.master_cb);
+            // Store the original amount of words for SOP
+            original_size = words.size();
 
-        // While there is data to send
-        while ((size = words.size()) > 0) begin
-            if (rand_with_prob()) begin
+            // Sync to clocking block
+            @(vif.master_cb);
 
-                // Set valid
-                vif.master_cb.valid <= 1'b1;
+            // While there is data to send
+            while ((size = words.size()) > 0) begin
+                if (rand_with_prob()) begin
 
-                // set SOP EOP conditions
-                vif.master_cb.sop <= (size == original_size);
-                vif.master_cb.eop <= (size == 1);
+                    // Set valid
+                    vif.master_cb.valid <= 1'b1;
 
-                // Pop word into data and evaluate empty
-                vif.master_cb.data  <= words.pop_front();
-                vif.master_cb.empty <= (size == 1) ? empty : $urandom();
+                    // set SOP EOP conditions
+                    vif.master_cb.sop <= (size == original_size);
+                    vif.master_cb.eop <= (size == 1);
 
-                // Wait for handshake
-                @(vif.master_cb iff vif.master_cb.rdy);
-            end else begin
+                    // Pop word into data and evaluate empty
+                    vif.master_cb.data  <= words.pop_front();
+                    vif.master_cb.empty <= (size == 1) ? empty : $urandom();
 
-                // Generate random invalid interface
-                randomize_interface();
-                @(vif.master_cb);
+                    // Wait for handshake
+                    @(vif.master_cb iff vif.master_cb.rdy);
+                end else begin
+
+                    // Generate random invalid interface
+                    randomize_interface();
+                    @(vif.master_cb);
+                end
             end
         end
 
