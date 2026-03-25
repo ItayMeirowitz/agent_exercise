@@ -50,7 +50,7 @@ class avalon_st_monitor #(parameter int DATA_WIDTH_IN_BYTES = 4);
                 this.msg_queue.push_back(received_queue);
 
                 // Reset queue
-                received_queue = {};
+                received_queue.delete();
             end else begin
 
                 // Add word
@@ -83,12 +83,8 @@ class avalon_st_monitor #(parameter int DATA_WIDTH_IN_BYTES = 4);
             end
 
             // Check sop & eop to track issues
-            if (vif.monitor_cb.sop) begin
-                in_packet = 1'b1;
-            end
-            if (vif.monitor_cb.eop) begin
-                in_packet = 1'b0;
-            end
+            if (vif.monitor_cb.sop) in_packet = 1'b1;
+            if (vif.monitor_cb.eop) in_packet = 1'b0;
         end
     endtask
 endclass

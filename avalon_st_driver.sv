@@ -112,7 +112,7 @@ class avalon_st_driver #(parameter int DATA_WIDTH_IN_BYTES = 4, parameter int OP
         end
     endtask
 
-    // Drive slave avalon_st interface ready signal based on the ready probability. 
+    // Drive slave avalon_st interface ready signal based on the ready prסobability. 
     task drive_slave();
 
         // Endless loop controlling ready

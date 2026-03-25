@@ -47,6 +47,9 @@ module tb ();
     byte_queue queue;
     queue_arr msgs_to_send;
 
+    // Track compared msg index
+    int compared_msgs = 0;
+
     // Generate clock.
     initial begin
         clk = 0;
@@ -119,46 +122,31 @@ module tb ();
         byte_queue incoming_msg;
         byte_queue monitored_msg;
 
-        // Track monitor msg index
-        int i = 0;
-        int j = 0;
-
         // Verify msgs forever
         forever begin
-            wait(monitor.msg_queue.size() > i && msgs_to_send.size() > i);
+            wait(monitor.msg_queue.size() > 0 && msgs_to_send.size() > 0);
 
             // Get first item
-            incoming_msg  = msgs_to_send[i];
-            monitored_msg = monitor.msg_queue[i];
+            incoming_msg  = msgs_to_send.pop_front();
+            monitored_msg = monitor.msg_queue.pop_front();
 
-            // Verify each byte
-            j = 0;
-            while (incoming_msg.size() > j && monitored_msg.size() > j) begin
-                if (incoming_msg[j] != monitored_msg[j]) begin
-                    $display(incoming_msg);
-                    $display(monitored_msg);
-                    $fatal("Miscompare");
-                end
-                j++;
-            end
-
-            // Verify both msgs had the same size
-            if (incoming_msg.size() != monitored_msg.size()) begin
+            // Verify data
+            if (incoming_msg != monitored_msg) begin
                 $display(incoming_msg);
                 $display(monitored_msg);
-                $fatal("Msg length miscompare");
+                $fatal("Miscompare");
             end else begin
-                $display("Good msg received %d", i);
+                $display("Good msg received %d", compared_msgs);
             end
-            i++;
+            compared_msgs++;
         end
     endtask
 
     // Prints amount of msgs from each source
     task print_report();
         $display("Received ENV msgs:");
-        $display(msgs_to_send.size());
+        $display(compared_msgs + msgs_to_send.size());
         $display("Received DUT msgs:");
-        $display(monitor.msg_queue.size());
+        $display(compared_msgs + monitor.msg_queue.size());
     endtask
 endmodule
