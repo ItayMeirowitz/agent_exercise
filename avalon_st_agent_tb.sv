@@ -45,6 +45,7 @@ module tb ();
     // General processes.
     //////////////////////////////////////////////////////////////////////////////
     byte_queue queue;
+    queue_arr msgs_to_send;
 
     // Generate clock.
     initial begin
@@ -61,7 +62,7 @@ module tb ();
 
     // Timeout.
     initial begin
-        #(10000) monitor.print_report();
+        #(10000) print_report();
         $finish;
     end
 
@@ -86,6 +87,7 @@ module tb ();
 
         // Run driver in separate thread using data from sequencer
         fork
+            compare_msgs();
             master_agent.drive_master();
         join_none
 
@@ -105,10 +107,58 @@ module tb ();
 
             // Store queue
             sequencer.store_queue(queue);
-            monitor.store_queue(queue);
+            msgs_to_send.push_back(queue);
 
             // Wait random interval between calls
             #($urandom_range(MIN_INTERVAL, MAX_INTERVAL));
         end
     end
+    
+    // Compare msgs
+    task compare_msgs();
+        byte_queue incoming_msg;
+        byte_queue monitored_msg;
+
+        // Track monitor msg index
+        int i = 0;
+        int j = 0;
+
+        // Verify msgs forever
+        forever begin
+            wait(monitor.msg_queue.size() > i && msgs_to_send.size() > i);
+
+            // Get first item
+            incoming_msg  = msgs_to_send[i];
+            monitored_msg = monitor.msg_queue[i];
+
+            // Verify each byte
+            j = 0;
+            while (incoming_msg.size() > j && monitored_msg.size() > j) begin
+                if (incoming_msg[j] != monitored_msg[j]) begin
+                    $display(incoming_msg);
+                    $display(monitored_msg);
+                    $fatal("Miscompare");
+                end
+                j++;
+            end
+
+            // Verify both msgs had the same size
+            if (incoming_msg.size() != monitored_msg.size()) begin
+                $display(incoming_msg);
+                $display(monitored_msg);
+                $fatal("Msg length miscompare");
+            end else begin
+                $display("Good msg received %d", i);
+            end
+            i++;
+        end
+    endtask
+
+    // Prints amount of msgs from each source
+    task print_report();
+        $display("Received ENV msgs:");
+        $display(msgs_to_send.size());
+        $display("Received DUT msgs:");
+        $display(monitor.msg_queue.size());
+    endtask
 endmodule

@@ -7,7 +7,6 @@ class avalon_st_monitor #(parameter int DATA_WIDTH_IN_BYTES = 4);
     -------------------------------------------------------------------------------*/
     virtual avalon_st_if vif;
     queue_arr msg_queue;
-    queue_arr incoming_msgs;
 
     /*-------------------------------------------------------------------------------
     -- Constructor.
@@ -17,7 +16,6 @@ class avalon_st_monitor #(parameter int DATA_WIDTH_IN_BYTES = 4);
         
         // Start separate thread to monitor (without halting the software)
         fork
-            compare_msgs();
             monitor_msgs();
             monitor_invalid_interface();
         join_none
@@ -92,51 +90,5 @@ class avalon_st_monitor #(parameter int DATA_WIDTH_IN_BYTES = 4);
                 in_packet = 1'b0;
             end
         end
-    endtask
-
-    // Add queue to incoming msgs
-    function void store_queue(byte_queue queue);
-        incoming_msgs.push_back(queue);
-    endfunction
-
-    // Compare msgs
-    task compare_msgs();
-        byte_queue incoming_msg;
-        byte_queue monitored_msg;
-
-        // Track monitor msg index
-        int i = 0;
-
-        // Verify msgs forever
-        forever begin
-            wait(this.msg_queue.size() > i && this.incoming_msgs.size() > i);
-
-            // Get first item
-            incoming_msg  = this.incoming_msgs[i];
-            monitored_msg = this.msg_queue[i];
-
-            // Verify each byte
-            while (incoming_msg.size() > 0 && monitored_msg.size() > 0) begin
-                if (incoming_msg.pop_front() != monitored_msg.pop_front()) begin
-                    $fatal("Miscompare");
-                end
-            end
-
-            // Verify both msgs had the same size
-            if (incoming_msg.size() > 0 || monitored_msg.size() > 0) begin
-                $fatal("Msg length miscompare");
-            end else begin
-                $display("Good msg received %d", i);
-            end
-            i++;
-        end
-    endtask
-
-    // Prints amount of msgs from each source
-    task print_report();
-        $display("Received ENV msgs:");
-        $display(incoming_msgs.size());
-        $display("Received DUT msgs:");
-        $display(msg_queue.size());
     endtask
 endclass
