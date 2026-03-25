@@ -41,9 +41,6 @@ module tb ();
     avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(SLAVE),  .VALID_READY_P(SLAVE_RDY_P)   ) slave_agent  = new(vif);
     avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER), .VALID_READY_P(MASTER_VALID_P)) master_agent = new(vif);
 
-    // Assign sequencer to master agent
-    master_agent.set_sequencer(sequencer);
-
     //////////////////////////////////////////////////////////////////////////////
     // General processes.
     //////////////////////////////////////////////////////////////////////////////
@@ -64,7 +61,8 @@ module tb ();
 
     // Timeout.
     initial begin
-        #(10000) $finish;
+        #(10000) monitor.print_report();
+        $finish;
     end
 
     // Waves dump.
@@ -80,6 +78,9 @@ module tb ();
 
     // Control the master lines of the interface
     initial begin
+        // Assign sequencer to master agent
+        master_agent.set_sequencer(sequencer);
+
         #RST_TIME;
         @(posedge(clk));
 
@@ -104,6 +105,7 @@ module tb ();
 
             // Store queue
             sequencer.store_queue(queue);
+            monitor.store_queue(queue);
 
             // Wait random interval between calls
             #($urandom_range(MIN_INTERVAL, MAX_INTERVAL));

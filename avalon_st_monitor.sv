@@ -6,6 +6,8 @@ class avalon_st_monitor #(parameter int DATA_WIDTH_IN_BYTES = 4);
     -- Members.
     -------------------------------------------------------------------------------*/
     virtual avalon_st_if vif;
+    queue_arr msg_queue;
+    queue_arr incoming_msgs;
 
     /*-------------------------------------------------------------------------------
     -- Constructor.
@@ -15,8 +17,9 @@ class avalon_st_monitor #(parameter int DATA_WIDTH_IN_BYTES = 4);
         
         // Start separate thread to monitor (without halting the software)
         fork
-            monitor_invalid_interface();
+            compare_msgs();
             monitor_msgs();
+            monitor_invalid_interface();
         join_none
     endfunction
 
@@ -24,96 +27,116 @@ class avalon_st_monitor #(parameter int DATA_WIDTH_IN_BYTES = 4);
 	-- Functions and Tasks.
     -------------------------------------------------------------------------------*/
     // Drive master using a byte queue converting it into the avalon_st interface
-    task monitor_msg(output byte_queue queue);
-    
+    task monitor_msgs();
+
         // Received words queue
         byte_queue word_received;
         byte_queue received_queue = {};
-    
-        // Is the monitor in a packet?
-        bit in_packet = 1'b0;
-
-        // Error tracking vars
-        bit eop_received  = 1'b0;
-        bit invalid_input = 1'b0;
 
         // Listen to transactions
-        do begin
+        forever @(vif.monitor_cb iff (vif.monitor_cb.valid && vif.monitor_cb.rdy)) begin
 
-            // Sync to clocking block
-            @(vif.monitor_cb);
+            // Pack received word.
+            word_received = {>>$size(byte){vif.monitor_cb.data}};
 
-            // Check if transaction occurred
-            if (vif.monitor_cb.rdy && vif.monitor_cb.valid) begin
-                
-                // Check eop and sop
-                if (vif.monitor_cb.sop) begin
-                    in_packet = 1'b1;
-                end
-                if (vif.monitor_cb.eop) begin
-                    eop_received = 1'b1;
-                end
+            // Receive data
+            if (vif.monitor_cb.eop) begin
 
-                // Pack received word.
-                word_received = {>>$size(byte){vif.monitor_cb.data}};
+                // Add word and apply empty
+                received_queue = {
+                    received_queue,
+                    word_received[0 : word_received.size() - vif.monitor_cb.empty - 1]
+                };
 
-                // Push word into queue, and apply empty only at EOP
-                if (eop_received) begin
-                    received_queue = {
-                        received_queue,
-                        word_received[0 : word_received.size() - vif.monitor_cb.empty - 1]
-                    }; 
-                end else begin
-                    // received_queue.push_back(word_received); 
-                    received_queue = {
-                        received_queue,
-                        word_received
-                    };
-                end
+                // Add packet to queue
+                this.msg_queue.push_back(received_queue);
+
+                // Reset queue
+                received_queue = {};
+            end else begin
+
+                // Add word
+                received_queue = {
+                    received_queue,
+                    word_received
+                };
             end
-        end while (!(in_packet && eop_received));
-
-        // Set output to queue
-        queue = received_queue;
+        end
     endtask
 
     // Check for invalid avalon st interface
     task monitor_invalid_interface();
-        forever begin
+        bit in_packet = 1'b0;
 
-            // Sync to clocking block
-            @(vif.monitor_cb);
-
+        forever @(vif.monitor_cb iff (vif.monitor_cb.valid && vif.monitor_cb.rdy)) begin
             // Check for valid out of packet (also checks multiple EOPs)
-            if (!in_packet && vif.monitor_cb.valid && !vif.monitor_cb.sop) begin
+            if (!in_packet && !vif.monitor_cb.sop) begin
                 $fatal("Valid out of packet");
-                invalid_input = 1'b1;
             end
 
             // Check for multiple SOPs (without proceeding EOP)
-            if (in_packet && vif.monitor_cb.valid && vif.monitor_cb.sop) begin
+            if (in_packet && vif.monitor_cb.sop) begin
                 $fatal("Multiple SOPs");
-                invalid_input = 1'b1;
             end
 
             // Check if empty is in valid range
-            if (vif.monitor_cb.valid && (vif.monitor_cb.empty >= DATA_WIDTH_IN_BYTES)) begin
+            if (vif.monitor_cb.empty >= DATA_WIDTH_IN_BYTES && vif.monitor_cb.eop) begin
                 $fatal("BAD empty value");
-                invalid_input = 1'b1;
+            end
+
+            // Check sop & eop to track issues
+            if (vif.monitor_cb.sop) begin
+                in_packet = 1'b1;
+            end
+            if (vif.monitor_cb.eop) begin
+                in_packet = 1'b0;
             end
         end
     endtask
 
-    task monitor_msgs();
-        byte_queue queue;
+    // Add queue to incoming msgs
+    function void store_queue(byte_queue queue);
+        incoming_msgs.push_back(queue);
+    endfunction
 
+    // Compare msgs
+    task compare_msgs();
+        byte_queue incoming_msg;
+        byte_queue monitored_msg;
+
+        // Track monitor msg index
+        int i = 0;
+
+        // Verify msgs forever
         forever begin
-            monitor_msg(queue);
+            wait(this.msg_queue.size() > i && this.incoming_msgs.size() > i);
 
-            $display($time);
-            $display("Found packet:");
-            $display(queue);
-            $display(queue.size());
+            // Get first item
+            incoming_msg  = this.incoming_msgs[i];
+            monitored_msg = this.msg_queue[i];
+
+            // Verify each byte
+            while (incoming_msg.size() > 0 && monitored_msg.size() > 0) begin
+                if (incoming_msg.pop_front() != monitored_msg.pop_front()) begin
+                    $fatal("Miscompare");
+                end
+            end
+
+            // Verify both msgs had the same size
+            if (incoming_msg.size() > 0 || monitored_msg.size() > 0) begin
+                $fatal("Msg length miscompare");
+            end else begin
+                $display("Good msg received %d", i);
+            end
+            i++;
         end
+    endtask
+
+    // Prints amount of msgs from each source
+    task print_report();
+        $display("Received ENV msgs:");
+        $display(incoming_msgs.size());
+        $display("Received DUT msgs:");
+        $display(msg_queue.size());
     endtask
 endclass
