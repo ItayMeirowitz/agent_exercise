@@ -7,6 +7,7 @@
 `include "avalon_st_if.sv"
 `include "avalon_st_agent_pack.sv"
 `include "avalon_st_sequencer.sv"
+`include "avalon_st_monitor.sv"
 `include "avalon_st_driver.sv"
 
 import avalon_st_agent_pack::*;
@@ -33,17 +34,21 @@ module tb ();
     // Create sequencer
     avalon_st_sequencer sequencer = new();
 
+    // Create monitor
+    avalon_st_monitor monitor = new(vif);
+
     // Create the master and slave agent to control the interface
     avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(SLAVE),  .VALID_READY_P(SLAVE_RDY_P)   ) slave_agent  = new(vif);
     avalon_st_driver#(.DATA_WIDTH_IN_BYTES(DATA_WIDTH_IN_BYTES), .OPERATION_MODE(MASTER), .VALID_READY_P(MASTER_VALID_P)) master_agent = new(vif);
-
-    // Assign sequencer to master agent
-    master_agent.set_sequencer(sequencer);
 
     //////////////////////////////////////////////////////////////////////////////
     // General processes.
     //////////////////////////////////////////////////////////////////////////////
     byte_queue queue;
+    queue_arr msgs_to_send;
+
+    // Track compared msg index
+    int compared_msgs = 0;
 
     // Generate clock.
     initial begin
@@ -60,7 +65,8 @@ module tb ();
 
     // Timeout.
     initial begin
-        #(10000) $finish;
+        #(10000) print_report();
+        $finish;
     end
 
     // Waves dump.
@@ -76,11 +82,15 @@ module tb ();
 
     // Control the master lines of the interface
     initial begin
+        // Assign sequencer to master agent
+        master_agent.set_sequencer(sequencer);
+
         #RST_TIME;
         @(posedge(clk));
 
         // Run driver in separate thread using data from sequencer
         fork
+            compare_msgs();
             master_agent.drive_master();
         join_none
 
@@ -100,9 +110,43 @@ module tb ();
 
             // Store queue
             sequencer.store_queue(queue);
+            msgs_to_send.push_back(queue);
 
             // Wait random interval between calls
             #($urandom_range(MIN_INTERVAL, MAX_INTERVAL));
         end
     end
+    
+    // Compare msgs
+    task compare_msgs();
+        byte_queue incoming_msg;
+        byte_queue monitored_msg;
+
+        // Verify msgs forever
+        forever begin
+            wait(monitor.msg_queue.size() > 0 && msgs_to_send.size() > 0);
+
+            // Get first item
+            incoming_msg  = msgs_to_send.pop_front();
+            monitored_msg = monitor.msg_queue.pop_front();
+
+            // Verify data
+            if (incoming_msg != monitored_msg) begin
+                $display(incoming_msg);
+                $display(monitored_msg);
+                $fatal("Miscompare");
+            end else begin
+                $display("Good msg received %d", compared_msgs);
+            end
+            compared_msgs++;
+        end
+    endtask
+
+    // Prints amount of msgs from each source
+    task print_report();
+        $display("Received ENV msgs:");
+        $display(compared_msgs + msgs_to_send.size());
+        $display("Received DUT msgs:");
+        $display(compared_msgs + monitor.msg_queue.size());
+    endtask
 endmodule
